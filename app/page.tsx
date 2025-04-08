@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from 'lucide-react';
-import { createChart, CrosshairMode, LineStyle, UTCTimestamp, IChartApi, ISeriesApi, LineSeries } from 'lightweight-charts';
+import { createChart, CrosshairMode, UTCTimestamp, IChartApi, ISeriesApi, LineSeries } from 'lightweight-charts';
 import { formatCurrency } from "@/lib/utils";
 
 // --- Interfaces (similar to dca-calculator) ---
@@ -181,10 +181,17 @@ export default function StockComparatorPage() {
               finalValue2: processed2.finalValue,
           });
 
-      } catch (err: any) {
-          setError(err.message || "An unknown error occurred.");
+      } catch (err) {
+          // Type assertion or checking 'err' type
+          let errorMessage = "An unknown error occurred.";
+          if (err instanceof Error) {
+              errorMessage = err.message;
+          } else if (typeof err === 'string') {
+              errorMessage = err;
+          }
+          setError(errorMessage);
           setComparisonData(null); // Clear data on error
-          console.error(err);
+          console.error("Error fetching comparison data:", err); // Log the original error
       } finally {
           setLoading(false);
       }
@@ -304,7 +311,6 @@ export default function StockComparatorPage() {
 
   }, [comparisonData]); // Rerun effect when comparisonData changes
 
-
   return (
     <main className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-center mb-8">Stock Performance Comparator</h1>
@@ -374,10 +380,10 @@ export default function StockComparatorPage() {
                     <p className="text-lg font-semibold text-blue-500">{formatCurrency(comparisonData.finalValue2)}</p>
                  </div>
               </div>
-            </div>
+      </div>
           )}
         </CardContent>
       </Card>
     </main>
   );
-} 
+}

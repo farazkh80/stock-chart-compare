@@ -107,16 +107,42 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(stockData)
 
-  } catch (error: any) {
+  } catch (error) {
     console.error(`Error fetching data for ${symbol}:`, error)
 
     // Check for specific Yahoo Finance errors (e.g., symbol not found)
-    // The error structure might vary, inspect error object for details
-    if (error.message?.includes("No data found") || error.code === 'Not Found') {
-       return NextResponse.json({ error: `Stock symbol ${symbol} not found or no data available` }, { status: 404 })
+    // Type checking or assertion for error properties
+    let errorMessage = "Failed to fetch stock data";
+    let statusCode = 500;
+
+    // Example: Check if it's a specific error type from the library if available,
+    // or check properties common to errors.
+    // This is a basic check; you might refine it based on yahoo-finance2 error details.
+    if (error instanceof Error) {
+        if (error.message?.includes("No data found")) { // Check standard Error message first
+             errorMessage = `Stock symbol ${symbol} not found or no data available`;
+             statusCode = 404;
+        } else {
+            // Keep generic message for other standard Error instances
+            errorMessage = error.message;
+        }
+    } else if (typeof error === 'object' && error !== null && 'code' in error) { // Check if it's an object with a 'code' property
+        // Type assertion after check (safer than 'any')
+        const specificError = error as { code?: string; message?: string };
+        if (specificError.code === 'Not Found') {
+             errorMessage = `Stock symbol ${symbol} not found or no data available`;
+             statusCode = 404;
+        } else if (specificError.message) {
+             // Use message from this error object if available
+             errorMessage = specificError.message;
+        }
+        // If code is not 'Not Found' and no message, the default errorMessage remains
+    } else if (typeof error === 'string') {
+        // Handle plain string errors if they can occur
+        errorMessage = error;
     }
-    // Generic server error for other issues
-    return NextResponse.json({ error: "Failed to fetch stock data" }, { status: 500 })
+
+    return NextResponse.json({ error: errorMessage }, { status: statusCode })
   }
 }
 
