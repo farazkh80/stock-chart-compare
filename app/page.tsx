@@ -51,8 +51,9 @@ const dateToUTCTimestamp = (dateString: string): UTCTimestamp => {
 export default function StockComparatorPage() {
   const [ticker1, setTicker1] = useState("");
   const [ticker2, setTicker2] = useState("");
+  const [initialInvestment, setInitialInvestment] = useState(100);
   const [timeframe, setTimeframe] = useState<ComparisonTimeframe>("1y");
-  const [comparisonData, setComparisonData] = useState<ComparisonResult | null>(null); // Use defined type
+  const [comparisonData, setComparisonData] = useState<ComparisonResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -96,7 +97,7 @@ export default function StockComparatorPage() {
   }, []);
 
   // Function to process fetched data into performance series
-  const processData = (stockData: StockData[], startDate: Date): { series: PerformancePoint[], finalValue: number } | null => {
+  const processData = useCallback((stockData: StockData[], startDate: Date, investmentAmount: number): { series: PerformancePoint[], finalValue: number } | null => {
       // Ensure data exists and has prices
       if (!stockData || !stockData[0]?.prices || stockData[0].prices.length === 0) return null;
       
@@ -118,17 +119,17 @@ export default function StockComparatorPage() {
       const relevantPrices = prices.slice(startIndex);
 
       for (const point of relevantPrices) {
-          const currentValue = 100 * (point.price / startPrice);
+          const currentValue = investmentAmount * (point.price / startPrice);
           performanceSeries.push({
               time: dateToUTCTimestamp(point.date),
               value: currentValue,
           });
       }
       
-      const finalValue = performanceSeries.length > 0 ? performanceSeries[performanceSeries.length - 1].value : 100;
+      const finalValue = performanceSeries.length > 0 ? performanceSeries[performanceSeries.length - 1].value : investmentAmount;
 
       return { series: performanceSeries, finalValue };
-  };
+  }, []);
 
   // NEW function to fetch and process data
   const fetchComparisonData = useCallback(async () => {
@@ -162,8 +163,8 @@ export default function StockComparatorPage() {
           const data1 = await response1.json();
           const data2 = await response2.json();
 
-          const processed1 = processData([data1], startDate);
-          const processed2 = processData([data2], startDate);
+          const processed1 = processData([data1], startDate, initialInvestment);
+          const processed2 = processData([data2], startDate, initialInvestment);
 
           if (!processed1 || !processed2) {
               let errorMsg = "Could not process data for comparison.";
@@ -195,7 +196,7 @@ export default function StockComparatorPage() {
       } finally {
           setLoading(false);
       }
-  }, [ticker1, ticker2, timeframe, getTimeframeStartDate]); // Include dependencies
+  }, [ticker1, ticker2, timeframe, initialInvestment, getTimeframeStartDate, processData]);
 
   // --- Effect for Dynamic Updates with Debounce ---
   useEffect(() => {
@@ -224,7 +225,7 @@ export default function StockComparatorPage() {
               clearTimeout(debounceTimerRef.current);
           }
       };
-  }, [ticker1, ticker2, timeframe, fetchComparisonData]); // Rerun when tickers, timeframe or the fetch function changes
+  }, [ticker1, ticker2, timeframe, initialInvestment, fetchComparisonData]);
 
   // --- Chart Effect --- 
   useEffect(() => {
@@ -311,18 +312,24 @@ export default function StockComparatorPage() {
 
   }, [comparisonData]); // Rerun effect when comparisonData changes
 
+  // Function to handle timeframe change
+  const handleTimeframeChange = (newTimeframe: ComparisonTimeframe) => {
+    setTimeframe(newTimeframe);
+    // Data fetching is handled by the useEffect hook watching 'timeframe'
+  };
+
   return (
     <main className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-center mb-8">Stock Performance Comparator</h1>
+      <h1 className="text-3xl font-bold text-center mb-8">Stock Performance Comparison Tool</h1>
       
       <Card className="max-w-4xl mx-auto">
         <CardHeader>
           <CardTitle>Compare Two Stocks</CardTitle>
-          <CardDescription>Enter two stock tickers and select a timeframe to see how a $100 investment would have performed.</CardDescription>
+          <CardDescription>Enter two stock tickers, an initial investment amount, and select a timeframe to see how the investment would have performed.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Input Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
             <div>
               <Label htmlFor="ticker1">Ticker 1</Label>
               <Input 
@@ -341,6 +348,25 @@ export default function StockComparatorPage() {
                 onChange={(e) => setTicker2(e.target.value.toUpperCase())} 
               />
             </div>
+          </div>
+
+          {/* Investment Amount Input */}
+          <div className="max-w-xs">
+            <Label htmlFor="investmentAmount">Initial Investment ($)</Label>
+            <Input
+              id="investmentAmount"
+              type="number"
+              value={initialInvestment}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10);
+                // Set to 0 if input is invalid or negative, otherwise use the parsed value
+                setInitialInvestment(isNaN(value) || value < 0 ? 0 : value);
+              }}
+              min="0"
+              step="100" // Suggest increments of 100
+              placeholder="100"
+              className="w-full" // Ensure it takes available width in its container
+            />
           </div>
 
           {/* Timeframe Selection */}
@@ -364,7 +390,9 @@ export default function StockComparatorPage() {
           
           {comparisonData && !loading && (
             <div className="mt-6 space-y-4">
-              <h3 className="text-xl font-semibold text-center">Performance of $100 Investment ({timeframe === 'all' ? 'All Time' : timeframe.replace('y', ' Year')})</h3>
+              <h3 className="text-xl font-semibold text-center">
+                Performance of {formatCurrency(initialInvestment)} Investment ({timeframe === 'all' ? 'All Time' : timeframe.replace('y', ' Year')})
+              </h3>
               {/* Chart Container */}
               <div ref={chartContainerRef} className="w-full h-[350px] bg-transparent rounded-md">
                  {/* Chart is rendered by useEffect */} 
